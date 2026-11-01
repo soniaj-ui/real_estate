@@ -1,6 +1,12 @@
 import { Router, type CookieOptions } from 'express';
 import { config } from '../../config';
 import { AppError } from '../../lib/AppError';
+import {
+  loginAccountLimiter,
+  loginIpLimiter,
+  refreshLimiter,
+  registerLimiter,
+} from '../../middleware/rateLimit';
 import { requireAuth } from '../../middleware/requireAuth';
 import { validate } from '../../middleware/validate';
 import { loginSchema, registerSchema } from './auth.schema';
@@ -17,19 +23,19 @@ const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 export const authRouter = Router();
 
-authRouter.post('/register', validate(registerSchema), async (req, res) => {
+authRouter.post('/register', registerLimiter, validate(registerSchema), async (req, res) => {
   const { user, accessToken, refreshToken } = await authService.register(req.body);
   res.cookie(COOKIE_NAME, refreshToken, { ...cookieOptions, maxAge: COOKIE_MAX_AGE });
   res.status(201).json({ user, accessToken });
 });
 
-authRouter.post('/login', validate(loginSchema), async (req, res) => {
+authRouter.post('/login', loginIpLimiter, validate(loginSchema), loginAccountLimiter, async (req, res) => {
   const { user, accessToken, refreshToken } = await authService.login(req.body);
   res.cookie(COOKIE_NAME, refreshToken, { ...cookieOptions, maxAge: COOKIE_MAX_AGE });
   res.json({ user, accessToken });
 });
 
-authRouter.post('/refresh', async (req, res) => {
+authRouter.post('/refresh', refreshLimiter, async (req, res) => {
   const token = req.cookies[COOKIE_NAME];
   if (!token) throw new AppError(401, 'Invalid refresh token');
 

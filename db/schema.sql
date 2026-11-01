@@ -21,13 +21,16 @@ CREATE TABLE properties (
   price       BIGINT NOT NULL CHECK (price >= 0),
   bedrooms    SMALLINT NOT NULL CHECK (bedrooms >= 0),
   status      TEXT NOT NULL DEFAULT 'active' CONSTRAINT properties_status_check CHECK (status IN ('active', 'inactive')),
-  created_at  TIMESTAMPTZ(3) NOT NULL DEFAULT now()
+  created_at  TIMESTAMPTZ(3) NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ(3) NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_city_price    ON properties (city, price, id) WHERE status = 'active';
 CREATE INDEX idx_city_newest   ON properties (city, created_at DESC, id DESC) WHERE status = 'active';
+CREATE INDEX idx_price         ON properties (price, id) WHERE status = 'active';
+CREATE INDEX idx_newest        ON properties (created_at DESC, id DESC) WHERE status = 'active';
 CREATE INDEX idx_similar       ON properties (city, type, price) WHERE status = 'active';
-CREATE INDEX idx_owner         ON properties (owner_id);
+CREATE INDEX idx_owner         ON properties (owner_id, id DESC);
 CREATE INDEX idx_locality_trgm ON properties USING gin (locality gin_trgm_ops);
 
 CREATE TABLE property_images (
@@ -61,3 +64,10 @@ CREATE TABLE inquiries (
 );
 
 CREATE INDEX idx_inquiries_sender ON inquiries (sender_id);
+
+-- Shared rate limit counters. UNLOGGED is faster, and losing them in a crash is harmless.
+CREATE UNLOGGED TABLE rate_limits (
+  key      TEXT PRIMARY KEY,
+  hits     INTEGER NOT NULL,
+  reset_at TIMESTAMPTZ(3) NOT NULL
+);

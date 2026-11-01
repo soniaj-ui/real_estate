@@ -1,8 +1,9 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import type { Pool, PoolClient } from 'pg';
 import { config } from '../../config';
-import { pool } from '../../db';
+import { pool, withTransaction } from '../../db';
 import { AppError } from '../../lib/AppError';
 
 const BCRYPT_ROUNDS = 12;
@@ -11,7 +12,7 @@ const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS);
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
-async function issueTokens(userId: string, familyId: string = randomUUID()) {
+async function issueTokens(userId: string, familyId: string = randomUUID(), db: Pool | PoolClient = pool) {
   const accessToken = jwt.sign({}, config.jwtSecret, {
     subject: userId,
     expiresIn: '15m',
@@ -19,7 +20,7 @@ async function issueTokens(userId: string, familyId: string = randomUUID()) {
   });
   const refreshToken = randomBytes(32).toString('base64url');
 
-  await pool.query(
+  await db.query(
     `INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
      VALUES ($1, $2, $3, now() + interval '30 days')`,
     [userId, familyId, sha256(refreshToken)],
@@ -57,13 +58,18 @@ export async function login(input: { email: string; password: string }) {
 
 export async function refresh(rawToken: string) {
   const hash = sha256(rawToken);
-  const { rows } = await pool.query(
-    `UPDATE refresh_tokens SET revoked_at = now()
-     WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
-     RETURNING user_id, family_id`,
-    [hash],
-  );
-  if (rows[0]) return issueTokens(rows[0].user_id, rows[0].family_id);
+
+  // Revoking and issuing together means a crash can't leave a user with no valid token.
+  const tokens = await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `UPDATE refresh_tokens SET revoked_at = now()
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+       RETURNING user_id, family_id`,
+      [hash],
+    );
+    return rows[0] ? issueTokens(rows[0].user_id, rows[0].family_id, client) : null;
+  });
+  if (tokens) return tokens;
 
   // The token is unknown, expired or already used. Reuse may mean it was stolen.
   await pool.query(

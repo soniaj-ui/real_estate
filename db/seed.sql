@@ -12,7 +12,7 @@ WITH places (idx, city, locality) AS (
     (30, 'delhi', 'Dwarka'), (31, 'delhi', 'Rohini'), (32, 'delhi', 'Saket'), (33, 'delhi', 'Vasant Kunj'), (34, 'delhi', 'Lajpat Nagar'),
     (35, 'delhi', 'Karol Bagh'), (36, 'delhi', 'Janakpuri'), (37, 'delhi', 'Pitampura'), (38, 'delhi', 'Greater Kailash'), (39, 'delhi', 'Mayur Vihar')
 )
-INSERT INTO properties (owner_id, slug, title, city, locality, type, price, bedrooms)
+INSERT INTO properties (owner_id, slug, title, city, locality, type, price, bedrooms, created_at)
 SELECT
   (SELECT id FROM users WHERE email = 'seed@example.com'),
   'listing-' || n,
@@ -21,7 +21,8 @@ SELECT
   places.locality,
   (ARRAY['apartment', 'villa', 'plot', 'commercial'])[1 + floor(random() * 4)::int]::property_type,
   (1000000 + random() * 50000000)::bigint,
-  floor(random() * 6)::smallint
+  floor(random() * 6)::smallint,
+  now() - random() * interval '365 days'
 FROM generate_series(1, 50000) AS n
 JOIN places ON places.idx = n % 40;
 
