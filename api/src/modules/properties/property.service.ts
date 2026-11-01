@@ -1,13 +1,9 @@
 import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import { pool } from '../../db';
 import { AppError } from '../../lib/AppError';
-import { toIdPage } from '../../lib/pagination';
-import {
-  cursorSchema,
-  type CreatePropertyInput,
-  type SearchPropertiesInput,
-  type UpdatePropertyInput,
-} from './property.schema';
+import { idSchema, toIdPage } from '../../lib/pagination';
+import type { CreatePropertyInput, SearchPropertiesInput, UpdatePropertyInput } from './property.schema';
 import { deleteImageFiles, imageUrl } from './propertyImage.service';
 
 // pg returns BIGINT as a string. Price is capped at MAX_SAFE_INTEGER, so a number is safe here.
@@ -41,20 +37,13 @@ function toSummary({ cover_key, ...row }: { cover_key: string | null; [column: s
   return { ...row, coverImage: cover_key ? imageUrl(cover_key) : null };
 }
 
-function decodeCursor(raw: string, sort: SearchPropertiesInput['sort']) {
-  let parsed;
-  try {
-    parsed = cursorSchema.parse(JSON.parse(Buffer.from(raw, 'base64url').toString()));
-  } catch {
-    throw new AppError(400, 'Invalid cursor');
-  }
-  // A cursor only makes sense for the sort that created it.
-  if (parsed.s !== sort) throw new AppError(400, 'Cursor does not match the sort');
-  return parsed;
+// A cursor is the last row's sort value and id, such as 1104855_21651.
+function parseCursor(raw: string, sort: SearchPropertiesInput['sort']) {
+  const [value, id] = raw.split('_');
+  const validValue = sort === 'newest' ? z.iso.datetime().safeParse(value).success : /^\d{1,16}$/.test(value);
+  if (!validValue || !idSchema.safeParse(id).success) throw new AppError(400, 'Invalid cursor');
+  return { value, id };
 }
-
-const encodeCursor = (sort: SearchPropertiesInput['sort'], value: unknown, id: string) =>
-  Buffer.from(JSON.stringify({ s: sort, v: value, id })).toString('base64url');
 
 export async function searchProperties(filters: SearchPropertiesInput) {
   const sort = SORTS[filters.sort];
@@ -76,8 +65,8 @@ export async function searchProperties(filters: SearchPropertiesInput) {
   if (filters.maxPrice !== undefined) addFilter('p.price <= ?', filters.maxPrice);
 
   if (filters.cursor) {
-    const cursor = decodeCursor(filters.cursor, filters.sort);
-    values.push(cursor.v, cursor.id);
+    const cursor = parseCursor(filters.cursor, filters.sort);
+    values.push(cursor.value, cursor.id);
     where.push(
       `(${sort.column}, p.id) ${sort.operator} ($${values.length - 1}::${sort.cast}, $${values.length}::bigint)`,
     );
@@ -95,14 +84,8 @@ export async function searchProperties(filters: SearchPropertiesInput) {
 
   const items = rows.slice(0, filters.limit);
   const last = items.at(-1);
-  const nextCursor =
-    rows.length > filters.limit && last
-      ? encodeCursor(
-          filters.sort,
-          filters.sort === 'newest' ? last.created_at.toISOString() : last.price,
-          last.id,
-        )
-      : null;
+  const lastValue = filters.sort === 'newest' ? last?.created_at.toISOString() : last?.price;
+  const nextCursor = rows.length > filters.limit ? `${lastValue}_${last.id}` : null;
   return { items: items.map(toSummary), nextCursor };
 }
 

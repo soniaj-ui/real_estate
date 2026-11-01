@@ -148,9 +148,9 @@ The API looks for the same city and type within 20% on price, and ranks by close
 - **Other checks:** a hidden honeypot field, a limit of one link per message, and message length rules. Owners can't send inquiries to their own listings.
 - **Login and writes:** failed logins are limited per IP and email, and writes are limited to 60 a minute per user.
 
-Rate limit counts live in PostgreSQL, so several API servers share them with no extra service to run. At high traffic, moving them to Redis would take this load off the database.
+Rate limit counts are kept in memory, which is simple and needs no extra service. The trade-off is that each API server counts separately and the counts reset on restart, so running several servers would need a shared store such as Redis.
 
-Read requests aren't rate limited here, because counting them would add a database write to each one. That belongs in a CDN or reverse proxy.
+Public read requests aren't rate limited here. In production, that belongs in a CDN or reverse proxy.
 
 ### Images
 

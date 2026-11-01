@@ -64,10 +64,3 @@ CREATE TABLE inquiries (
 );
 
 CREATE INDEX idx_inquiries_sender ON inquiries (sender_id);
-
--- Shared rate limit counters. UNLOGGED is faster, and losing them in a crash is harmless.
-CREATE UNLOGGED TABLE rate_limits (
-  key      TEXT PRIMARY KEY,
-  hits     INTEGER NOT NULL,
-  reset_at TIMESTAMPTZ(3) NOT NULL
-);

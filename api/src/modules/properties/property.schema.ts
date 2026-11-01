@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { idSchema } from '../../lib/pagination';
 
 export const PROPERTY_TYPES = ['apartment', 'villa', 'plot', 'commercial'] as const;
 export const SORT_OPTIONS = ['newest', 'price_asc', 'price_desc'] as const;
@@ -47,15 +46,6 @@ export const searchPropertiesSchema = z
     message: 'minPrice cannot be greater than maxPrice',
     path: ['minPrice'],
   });
-
-export const cursorSchema = z.discriminatedUnion('s', [
-  z.object({ s: z.literal('newest'), v: z.iso.datetime(), id: idSchema }),
-  z.object({
-    s: z.enum(['price_asc', 'price_desc']),
-    v: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    id: idSchema,
-  }),
-]);
 
 export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
 export type UpdatePropertyInput = z.infer<typeof updatePropertySchema>;
