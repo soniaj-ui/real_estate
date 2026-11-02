@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-raleway);
+}
+
+body {
+  color: var(--foreground);
+  font-family: var(--font-raleway), Arial, Helvetica, sans-serif;
+  /* Raleway's numbers go up and down like handwriting by default, which is hard to read in prices. */
+  font-variant-numeric: lining-nums;
+}
+
+/* On a page with a photo banner, the header floats over the photo with white text. */
+body:has(.hero) .site-header {
+  position: absolute;
+  inset-inline: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+body:has(.hero) .site-header .nav-link {
+  color: white;
+}

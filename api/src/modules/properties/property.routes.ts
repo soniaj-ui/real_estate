@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { idPageSchema, idSchema } from '../../lib/pagination';
+import { revalidateProperty } from '../../lib/revalidate';
 import { writeLimiter } from '../../middleware/rateLimit';
 import { requireAuth } from '../../middleware/requireAuth';
 import { validate } from '../../middleware/validate';
@@ -22,10 +23,19 @@ propertyRouter.post('/', requireAuth, writeLimiter, validate(createPropertySchem
   res.status(201).json({ property });
 });
 
-// Must stay above /:slug, or "mine" would be treated as a slug.
+// These must stay above /:slug, or "sitemap" and "mine" would be treated as slugs.
+propertyRouter.get('/sitemap', async (_req, res) => {
+  res.json({ items: await propertyService.getSitemapEntries() });
+});
+
 propertyRouter.get('/mine', requireAuth, async (req, res) => {
   const { limit, cursor } = idPageSchema.parse(req.query);
   res.json(await propertyService.getMyProperties(req.user!.id, limit, cursor));
+});
+
+propertyRouter.get('/mine/:id', requireAuth, async (req, res) => {
+  const id = idSchema.parse(req.params.id);
+  res.json({ property: await propertyService.getMyProperty(id, req.user!.id) });
 });
 
 propertyRouter.get('/:slug', async (req, res) => {
@@ -52,15 +62,17 @@ propertyRouter.delete('/:id', requireAuth, writeLimiter, async (req, res) => {
 
 propertyRouter.post('/:id/images', requireAuth, writeLimiter, upload.single('image'), async (req, res) => {
   const id = idSchema.parse(req.params.id);
-  await propertyService.assertOwner(id, req.user!.id);
+  const slug = await propertyService.assertOwner(id, req.user!.id);
   const image = await imageService.addImage(id, req.file?.buffer);
+  revalidateProperty(slug);
   res.status(201).json({ image });
 });
 
 propertyRouter.delete('/:id/images/:imageId', requireAuth, writeLimiter, async (req, res) => {
   const id = idSchema.parse(req.params.id);
   const imageId = idSchema.parse(req.params.imageId);
-  await propertyService.assertOwner(id, req.user!.id);
+  const slug = await propertyService.assertOwner(id, req.user!.id);
   await imageService.removeImage(id, imageId);
+  revalidateProperty(slug);
   res.status(204).end();
 });

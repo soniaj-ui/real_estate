@@ -16,15 +16,18 @@ INSERT INTO properties (owner_id, slug, title, city, locality, type, price, bedr
 SELECT
   (SELECT id FROM users WHERE email = 'seed@example.com'),
   'listing-' || n,
-  'Listing ' || n,
+  initcap(picked.kind) || ' for sale',
   places.city,
   places.locality,
-  (ARRAY['apartment', 'villa', 'plot', 'commercial'])[1 + floor(random() * 4)::int]::property_type,
+  picked.kind::property_type,
   (1000000 + random() * 50000000)::bigint,
   floor(random() * 6)::smallint,
   now() - random() * interval '365 days'
-FROM generate_series(1, 50000) AS n
-JOIN places ON places.idx = n % 40;
+FROM (
+  SELECT n, (ARRAY['apartment', 'villa', 'plot', 'commercial'])[1 + floor(random() * 4)::int] AS kind
+  FROM generate_series(1, 50000) AS n
+) AS picked
+JOIN places ON places.idx = picked.n % 40;
 
 -- Bulk inserts sit in the GIN pending list, which makes the planner avoid this index until flushed.
 SELECT gin_clean_pending_list('idx_locality_trgm');

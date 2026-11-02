@@ -12,7 +12,9 @@ if (jwtSecret.length < 32) throw new Error('JWT_SECRET must be at least 32 chara
 export const config = {
   jwtSecret,
   isProduction: process.env.NODE_ENV === 'production',
-  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  // Shared with the frontend, so only this API can tell it to refresh a cached page.
+  revalidateSecret: process.env.REVALIDATE_SECRET,
   publicUrl: process.env.PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4000}`,
   uploadDir: path.resolve(process.env.UPLOAD_DIR ?? 'uploads'),
   // Number of proxies in front of the API. It must match the real setup, or rate limits see the wrong IP.

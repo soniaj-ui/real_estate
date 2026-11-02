@@ -7,7 +7,7 @@ A scalable real-estate listing platform in TypeScript, inspired by 99acres and N
 | Backend | Node.js, Express 5, TypeScript | Complete |
 | Database | PostgreSQL 16 | Complete, with 50,000 seed listings |
 | API documentation | OpenAPI 3.1, Swagger UI at `/api-docs` | Complete |
-| Frontend | Next.js, Tailwind CSS | Not started |
+| Frontend | Next.js 16, Tailwind CSS | Complete |
 
 ## Run the backend
 
@@ -21,15 +21,26 @@ You need Node.js 22 or later and PostgreSQL 16.
    psql -d property -f db/seed.sql
    ```
 
-2. Install the API and create its settings file:
+2. Install the API:
 
    ```bash
    cd api
    npm install
-   cp .env.example .env
    ```
 
-3. In `.env`, set `DATABASE_URL` and `JWT_SECRET`. The file shows how to generate a secret.
+3. Create a file called `.env` in the `api` folder, with your database details and a secret of at least 32 characters. It's ignored by git, so your secrets stay private.
+
+   ```
+   PORT=4000
+   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/property
+   JWT_SECRET=replace-with-a-long-random-value
+   ```
+
+   You can generate a secret with:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+   ```
 
 4. Start the API:
 
@@ -40,6 +51,22 @@ You need Node.js 22 or later and PostgreSQL 16.
 The API runs at `http://localhost:4000`, and its documentation is at [`http://localhost:4000/api-docs`](http://localhost:4000/api-docs). The raw OpenAPI file is at `/api-docs.json`.
 
 For production, run `npm run build`, then `npm start`.
+
+## Run the frontend
+
+With the API running, open a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The site runs at `http://localhost:3000`, and it works with the default settings.
+
+To make edits refresh public pages straight away, add the same `REVALIDATE_SECRET=` line, with a long random value, to `api/.env` and `frontend/.env`. Without it, pages still refresh within 5 minutes.
+
+To point the site somewhere else, set `API_URL`, `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SITE_URL` in `frontend/.env`. The API also reads these optional settings from `api/.env`: `FRONTEND_URL`, `PUBLIC_URL`, `UPLOAD_DIR` and `TRUST_PROXY`.
 
 ## API overview
 
@@ -55,6 +82,8 @@ All routes start with `/api/v1`. The Swagger page has full request and response 
 | GET | `/properties` | No | Search, filter, sort and paginate listings |
 | POST | `/properties` | Yes | Create a listing |
 | GET | `/properties/mine` | Yes | List your listings |
+| GET | `/properties/mine/{id}` | Owner | Get one of your listings to edit |
+| GET | `/properties/sitemap` | No | List slugs for the sitemap |
 | GET | `/properties/{slug}` | No | Get a listing |
 | GET | `/properties/{slug}/similar` | No | Get similar listings |
 | PATCH | `/properties/{id}` | Owner | Edit a listing |
@@ -85,9 +114,13 @@ api/src/
 db/
   schema.sql       Tables, rules and indexes
   seed.sql         One test user and 50,000 listings
+frontend/
+  app/             Pages, plus the sitemap, robots file and cache refresh route
+  components/      Reusable pieces, such as the listing card and forms
+  lib/             API calls, login state and shared helpers
 ```
 
-Each module separates routes (HTTP), schemas (validation) and services (logic and queries).
+Each backend module separates routes (HTTP), schemas (validation) and services (logic and queries).
 
 ## Design decisions
 
@@ -108,7 +141,7 @@ Each module separates routes (HTTP), schemas (validation) and services (logic an
 
 ### Search, indexing and pagination
 
-Pagination uses cursors instead of `OFFSET`, because deep offset pages have to read and discard every earlier row. The trade-off is that users can't jump to a page number, which suits "load more".
+Pagination uses cursors instead of `OFFSET`, because deep offset pages have to read and discard every earlier row. The trade-off is that users can't jump to a page number, so the site has Next page and First page links. The page number it shows comes from the URL and is only for display.
 
 | Index | Serves |
 | --- | --- |
@@ -155,6 +188,23 @@ Public read requests aren't rate limited here. In production, that belongs in a 
 ### Images
 
 Images are uploaded through the API and stored on disk with random names, and the database holds only their location. Each upload is limited to 5 MB and 10 per listing, and is checked by its actual file contents rather than its name. In production, I'd move these to object storage such as S3, because disk files aren't shared between servers.
+
+### Frontend and SEO
+
+| Page | Rendering | Why |
+| --- | --- | --- |
+| Listing detail | ISR, cached for 5 minutes and refreshed straight after an edit | Read far more than changed, and must be crawlable |
+| Search | Server-rendered per request | Too many filter combinations to cache usefully |
+| Login, my listings, inquiries, forms | Client Components, for interaction | Private, and kept out of search results |
+
+- **ISR setup:** detail pages use `revalidate` with an empty `generateStaticParams`, so each is built on its first visit rather than building 50,000 at once. `cacheComponents` is off, to use standard ISR.
+- **Refreshing after an edit:** the API calls a protected Next.js route, which runs `revalidatePath`. The API doesn't wait for it, so a stopped frontend can't fail an edit.
+- **SEO:** per-listing titles and descriptions from `generateMetadata`, canonical URLs, Open Graph tags, `RealEstateListing` JSON-LD, a sitemap and a robots file. Missing listings return a real 404.
+- **Performance:** `next/image` serves optimised photos in fixed-shape boxes, so the page doesn't jump as they load. Search filters live in the URL, so results can be shared and bookmarked.
+- **Login in the browser:** the access token stays in memory rather than `localStorage`, and a page reload gets a new one using the `httpOnly` cookie. When a token expires, requests renew it and retry automatically. A browser lock stops tabs refreshing at once, which would look like token theft.
+- **Design:** a full-width photo banner with a floating search card, black and lime pill buttons, and prices in lakh and crore, as Indian buyers expect. The stats describe the test data, and there are no made-up reviews.
+- **Sample photos:** listings without a photo show one from `frontend/public/samples`, chosen by type and id and labelled "Sample photo". The photos are from [Unsplash](https://unsplash.com/license), and a live site would remove them.
+- **Sitemap limit:** it lists the newest 5,000 listings. A larger site would split it with `generateSitemaps`.
 
 ### Security
 

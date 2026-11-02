@@ -279,6 +279,42 @@ export const openApiSpec = {
         },
       },
     },
+    '/properties/mine/{id}': {
+      get: {
+        tags: ['Properties'],
+        summary: 'Get one of my listings',
+        description: 'Used by the edit page. Unlike the public route, it also finds hidden listings.',
+        security: secured,
+        parameters: [pathParam('id', 'The listing id.')],
+        responses: {
+          200: response('The listing', { type: 'object', properties: { property: ref('PropertyDetail') } }),
+          400: error('Invalid id'),
+          401: error('Authentication required'),
+          404: error('Property not found'),
+        },
+      },
+    },
+    '/properties/sitemap': {
+      get: {
+        tags: ['Properties'],
+        summary: 'List listings for the sitemap',
+        description: 'Public. Returns the slugs and update times of the newest 5,000 active listings.',
+        responses: {
+          200: response('Sitemap entries', {
+            type: 'object',
+            properties: {
+              items: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { slug: { type: 'string' }, updated_at: { type: 'string', format: 'date-time' } },
+                },
+              },
+            },
+          }),
+        },
+      },
+    },
     '/properties/{slug}': {
       get: {
         tags: ['Properties'],

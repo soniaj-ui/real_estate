@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { pool } from '../../db';
 import { AppError } from '../../lib/AppError';
 import { idSchema, toIdPage } from '../../lib/pagination';
+import { revalidateProperty } from '../../lib/revalidate';
 import type { CreatePropertyInput, SearchPropertiesInput, UpdatePropertyInput } from './property.schema';
 import { deleteImageFiles, imageUrl } from './propertyImage.service';
 
@@ -100,26 +101,52 @@ export async function createProperty(ownerId: string, input: CreatePropertyInput
   return rows[0];
 }
 
-export async function getPropertyBySlug(slug: string) {
-  const { rows } = await pool.query(
-    `SELECT ${COLUMNS},
-       COALESCE(
-         (SELECT json_agg(json_build_object('id', i.id, 'storageKey', i.storage_key, 'position', i.position) ORDER BY i.position)
-          FROM property_images i WHERE i.property_id = properties.id),
-         '[]'
-       ) AS images
-     FROM properties
-     WHERE slug = $1 AND status = 'active'`,
-    [slug],
-  );
-  if (!rows[0]) throw new AppError(404, 'Property not found');
+// Collects a listing's images into one list, so one query is enough.
+const IMAGES_COLUMN = `COALESCE(
+    (SELECT json_agg(json_build_object('id', i.id, 'storageKey', i.storage_key, 'position', i.position) ORDER BY i.position)
+     FROM property_images i WHERE i.property_id = properties.id),
+    '[]'
+  ) AS images`;
 
-  const images = rows[0].images.map((image: { id: number; storageKey: string; position: number }) => ({
+function withImageUrls(row: { images: { id: number; storageKey: string; position: number }[] }) {
+  const images = row.images.map((image) => ({
     id: String(image.id),
     url: imageUrl(image.storageKey),
     position: image.position,
   }));
-  return { ...rows[0], images };
+  return { ...row, images };
+}
+
+export async function getPropertyBySlug(slug: string) {
+  const { rows } = await pool.query(
+    `SELECT ${COLUMNS}, ${IMAGES_COLUMN} FROM properties WHERE slug = $1 AND status = 'active'`,
+    [slug],
+  );
+  if (!rows[0]) throw new AppError(404, 'Property not found');
+  return withImageUrls(rows[0]);
+}
+
+// For the edit page. Unlike the public page, it also finds the owner's hidden listings.
+export async function getMyProperty(id: string, ownerId: string) {
+  const { rows } = await pool.query(
+    `SELECT ${COLUMNS}, ${IMAGES_COLUMN} FROM properties WHERE id = $1 AND owner_id = $2`,
+    [id, ownerId],
+  );
+  if (!rows[0]) throw new AppError(404, 'Property not found');
+  return withImageUrls(rows[0]);
+}
+
+const SITEMAP_LIMIT = 5000;
+
+export async function getSitemapEntries() {
+  const { rows } = await pool.query(
+    `SELECT slug, updated_at FROM properties
+     WHERE status = 'active'
+     ORDER BY created_at DESC, id DESC
+     LIMIT $1`,
+    [SITEMAP_LIMIT],
+  );
+  return rows;
 }
 
 export async function getMyProperties(ownerId: string, limit: number, cursor?: string) {
@@ -177,10 +204,11 @@ export async function getSimilarProperties(slug: string) {
   return found.map(toSummary);
 }
 
-export async function assertOwner(id: string, ownerId: string) {
-  const { rows } = await pool.query('SELECT owner_id FROM properties WHERE id = $1', [id]);
+export async function assertOwner(id: string, ownerId: string): Promise<string> {
+  const { rows } = await pool.query('SELECT owner_id, slug FROM properties WHERE id = $1', [id]);
   if (!rows[0]) throw new AppError(404, 'Property not found');
   if (rows[0].owner_id !== ownerId) throw new AppError(403, 'You can only change your own listings');
+  return rows[0].slug;
 }
 
 export async function updateProperty(id: string, ownerId: string, input: UpdatePropertyInput) {
@@ -203,6 +231,7 @@ export async function updateProperty(id: string, ownerId: string, input: UpdateP
   );
   // No row matched, so work out whether the listing is missing or someone else's.
   if (!rows[0]) await assertOwner(id, ownerId);
+  revalidateProperty(rows[0].slug);
   return rows[0];
 }
 
@@ -213,13 +242,14 @@ export async function deleteProperty(id: string, ownerId: string) {
      WHERE p.id = $1 AND p.owner_id = $2`,
     [id, ownerId],
   );
-  const { rowCount } = await pool.query(
-    'DELETE FROM properties WHERE id = $1 AND owner_id = $2',
+  const { rows } = await pool.query(
+    'DELETE FROM properties WHERE id = $1 AND owner_id = $2 RETURNING slug',
     [id, ownerId],
   );
-  if (!rowCount) {
+  if (!rows[0]) {
     await assertOwner(id, ownerId);
     return;
   }
   await deleteImageFiles(images.map((image) => image.storage_key));
+  revalidateProperty(rows[0].slug);
 }

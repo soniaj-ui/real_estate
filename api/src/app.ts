@@ -29,7 +29,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 // Images are loaded by the frontend from another origin.
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: config.corsOrigin, credentials: true }));
+app.use(cors({ origin: config.frontendUrl, credentials: true }));
 app.use(compression());
 app.use(express.json());
 app.use(cookieParser());
