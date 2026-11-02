@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { EditListingLink } from '@/components/EditListingLink';
 import { InquiryForm } from '@/components/InquiryForm';
 import { PropertyCard } from '@/components/PropertyCard';
 import { SamplePhoto } from '@/components/SamplePhoto';
@@ -107,7 +108,10 @@ export default async function PropertyPage({ params }: Props) {
           )}
 
           <div className="mt-4 rounded-3xl bg-gray-100 p-6">
-            <h1 className="text-3xl font-light text-gray-950">{property.title}</h1>
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-3xl font-light text-gray-950">{property.title}</h1>
+              <EditListingLink propertyId={property.id} ownerId={property.owner_id} />
+            </div>
             <p className="mt-1 capitalize text-gray-700">{property.locality}, {property.city}</p>
             <p className="mt-3 text-4xl font-semibold text-gray-950">{formatPrice(property.price)}</p>
             <p className="text-sm text-gray-600">{formatFullPrice(property.price)}</p>
@@ -127,10 +131,7 @@ export default async function PropertyPage({ params }: Props) {
           )}
         </div>
 
-        <aside className="h-fit rounded-3xl border border-gray-200 bg-white p-6 shadow-lg lg:sticky lg:top-20">
-          <h2 className="mb-3 text-lg font-semibold text-gray-900">Contact the owner</h2>
-          <InquiryForm propertyId={property.id} ownerId={property.owner_id} />
-        </aside>
+        <InquiryForm propertyId={property.id} ownerId={property.owner_id} />
       </div>
 
       {similar.length > 0 && (

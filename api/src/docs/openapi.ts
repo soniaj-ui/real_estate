@@ -155,6 +155,11 @@ export const openApiSpec = {
           property_id: { type: 'string' },
           property_slug: { type: 'string' },
           property_title: { type: 'string' },
+          property_city: { type: 'string' },
+          property_locality: { type: 'string' },
+          property_type: { type: 'string', enum: [...PROPERTY_TYPES] },
+          property_price: { type: 'number' },
+          coverImage: { type: ['string', 'null'], description: 'The listing photo, if it has one.' },
         },
       },
       ReceivedInquiry: {

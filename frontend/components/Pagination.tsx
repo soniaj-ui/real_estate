@@ -22,14 +22,15 @@ export function Pagination({ page, count, firstHref, nextHref }: Props) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        {/* The buttons only show a symbol, so aria-label gives screen readers the name, and title shows it on hover. */}
         {firstHref && (
-          <Link href={firstHref} className={secondaryButton}>
-            <span aria-hidden="true">←</span> First page
+          <Link href={firstHref} aria-label="First page" title="First page" className={secondaryButton}>
+            <span aria-hidden="true" className="text-xl leading-none">«</span>
           </Link>
         )}
         {nextHref ? (
-          <Link href={nextHref} className={primaryButton}>
-            Next page <span aria-hidden="true">→</span>
+          <Link href={nextHref} aria-label="Next page" title="Next page" className={primaryButton}>
+            <span aria-hidden="true" className="text-xl leading-none">›</span>
           </Link>
         ) : (
           <span className="px-2 text-sm font-medium text-gray-600">End of results</span>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/FormError';
 import { useAuth } from '@/lib/auth';
 import { ApiError, sendJson } from '@/lib/client';
@@ -12,6 +12,15 @@ type Props = {
   propertyId: string;
   ownerId: string;
 };
+
+function ContactBox({ children }: { children: ReactNode }) {
+  return (
+    <aside className="h-fit rounded-3xl border border-gray-200 bg-white p-6 shadow-lg lg:sticky lg:top-20">
+      <h2 className="mb-3 text-lg font-semibold text-gray-900">Contact the owner</h2>
+      {children}
+    </aside>
+  );
+}
 
 export function InquiryForm({ propertyId, ownerId }: Props) {
   const { user, loading } = useAuth();
@@ -41,56 +50,55 @@ export function InquiryForm({ propertyId, ownerId }: Props) {
     }
   }
 
-  if (loading) return null;
+  // Owners don't message themselves, so they don't get this box. They edit from the icon by the title.
+  if (loading || user?.id === ownerId) return null;
 
   if (!user) {
     return (
-      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className={secondaryButton}>
-        Log in to contact the owner
-      </Link>
-    );
-  }
-
-  if (user.id === ownerId) {
-    return (
-      <Link href={`/listings/${propertyId}/edit`} className={secondaryButton}>
-        Edit your listing
-      </Link>
+      <ContactBox>
+        <Link href={`/login?next=${encodeURIComponent(pathname)}`} className={secondaryButton}>
+          Log in to contact the owner
+        </Link>
+      </ContactBox>
     );
   }
 
   if (sent) {
     return (
-      <p role="status" className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-        Your message has been sent to the owner.
-      </p>
+      <ContactBox>
+        <p role="status" className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+          Your message has been sent to the owner.
+        </p>
+      </ContactBox>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
-        <label htmlFor="message" className={labelClass}>Message to the owner</label>
-        <textarea
-          id="message"
-          name="message"
-          rows={4}
-          required
-          minLength={10}
-          maxLength={1000}
-          defaultValue="Hi, I'm interested in this property. Please share more details."
-          className={inputClass}
-        />
-      </div>
+    <ContactBox>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label htmlFor="message" className={labelClass}>Message to the owner</label>
+          <textarea
+            id="message"
+            name="message"
+            rows={4}
+            required
+            minLength={10}
+            maxLength={1000}
+            defaultValue="Hi, I'm interested in this property. Please share more details."
+            className={inputClass}
+          />
+        </div>
 
-      {/* A spam trap: people can't see this field, so only bots fill it in. */}
-      <input name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
+        {/* A spam trap: people can't see this field, so only bots fill it in. */}
+        <input name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
 
-      <FormError error={error} />
+        <FormError error={error} />
 
-      <button disabled={submitting} className={primaryButton}>
-        {submitting ? 'Sending...' : 'Send message'}
-      </button>
-    </form>
+        <button disabled={submitting} className={primaryButton}>
+          {submitting ? 'Sending...' : 'Send message'}
+        </button>
+      </form>
+    </ContactBox>
   );
 }

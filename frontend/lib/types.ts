@@ -45,6 +45,11 @@ export type Inquiry = {
   property_id: string;
   property_slug: string;
   property_title: string;
+  property_city: string;
+  property_locality: string;
+  property_type: PropertyType;
+  property_price: number;
+  coverImage: string | null;
   sender_name?: string;
   sender_email?: string;
 };
